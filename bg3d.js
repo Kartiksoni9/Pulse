@@ -1,8 +1,7 @@
 /* ══════════════════════════════════════════════
    PULSE CHAT — bg3d.js
-   3D animated canvas background
-   Layers: nebulae · grid lines · connection web
-           floating shapes · particle field
+   Layers: aurora waves · ripple rings
+           grid lines · floating shapes · particles
 ══════════════════════════════════════════════ */
 
 (function () {
@@ -23,19 +22,6 @@
     const W = () => canvas.width;
     const H = () => canvas.height;
 
-    /* ── Mouse tracking ── */
-    const mouse = { x: W() / 2, y: H() / 2 };
-    window.addEventListener('mousemove', e => {
-        mouse.x = e.clientX;
-        mouse.y = e.clientY;
-    });
-    window.addEventListener('touchmove', e => {
-        if (e.touches.length > 0) {
-            mouse.x = e.touches[0].clientX;
-            mouse.y = e.touches[0].clientY;
-        }
-    }, { passive: true });
-
     /* ── Helpers ── */
     function rand(min, max) { return min + Math.random() * (max - min); }
 
@@ -44,51 +30,165 @@
         '#4f46e5', '#7c3aed', '#00d4aa', '#fd79a8'
     ];
 
-    /* ════════════════════
-       NEBULA BLOBS
-    ════════════════════ */
-    class Nebula {
-        constructor(bx, by, r, color) {
-            this.bx    = bx;
-            this.by    = by;
-            this.r     = r;
-            this.color = color;
-            this.t     = rand(0, Math.PI * 2);
-            this.speed = rand(0.0015, 0.004);
-            this.ox    = rand(-40, 40);
-            this.oy    = rand(-30, 30);
+    /* ════════════════════════════════
+       AURORA WAVES
+       — multiple layered sine bands
+         that drift horizontally and
+         breathe in brightness
+    ════════════════════════════════ */
+    class AuroraWave {
+        constructor(opts) {
+            this.yBase    = opts.yBase;          // 0-1 vertical anchor
+            this.amp      = opts.amp;            // wave amplitude (px)
+            this.freq     = opts.freq;           // horizontal frequency
+            this.speed    = opts.speed;          // phase drift speed
+            this.color1   = opts.color1;         // left gradient color
+            this.color2   = opts.color2;         // right gradient color
+            this.thick    = opts.thick;          // band thickness (px)
+            this.alpha    = opts.alpha;          // max alpha
+            this.phase    = rand(0, Math.PI * 2);
+            this.breathT  = rand(0, Math.PI * 2);
+            this.breathSpd= rand(0.003, 0.007);
+            this.driftSpd = rand(0.0002, 0.0006) * (Math.random() > 0.5 ? 1 : -1);
+            this.yOffset  = 0;
+            this.yOSpd    = rand(0.0004, 0.001) * (Math.random() > 0.5 ? 1 : -1);
+            this.yRange   = rand(20, 60);
+            this.yT       = rand(0, Math.PI * 2);
         }
 
         update() {
-            this.t += this.speed;
-            this.x = this.bx * W() + Math.sin(this.t)       * this.ox;
-            this.y = this.by * H() + Math.cos(this.t * 0.7) * this.oy;
+            this.phase   += this.speed;
+            this.breathT += this.breathSpd;
+            this.yT      += this.yOSpd;
+            this.yOffset  = Math.sin(this.yT) * this.yRange;
         }
 
         draw() {
-            const grad = ctx.createRadialGradient(
-                this.x, this.y, 0,
-                this.x, this.y, this.r
-            );
-            grad.addColorStop(0, this.color + '1a');
-            grad.addColorStop(1, this.color + '00');
-            ctx.globalAlpha = 1;
-            ctx.fillStyle   = grad;
+            const w      = W();
+            const h      = H();
+            const steps  = Math.ceil(w / 3);           // sample every 3px — smooth enough
+            const baseY  = this.yBase * h + this.yOffset;
+            const breath = 0.55 + 0.45 * Math.sin(this.breathT);
+            const alpha  = this.alpha * breath;
+
+            /* horizontal gradient for colour shift left→right */
+            const grad = ctx.createLinearGradient(0, 0, w, 0);
+            grad.addColorStop(0,    this.color1 + '00');
+            grad.addColorStop(0.25, this.color1);
+            grad.addColorStop(0.5,  this.color2);
+            grad.addColorStop(0.75, this.color1);
+            grad.addColorStop(1,    this.color2 + '00');
+
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = grad;
+            ctx.lineWidth   = this.thick;
+            ctx.lineCap     = 'round';
+            ctx.shadowBlur  = this.thick * 3.5;
+            ctx.shadowColor = this.color1;
+
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-            ctx.fill();
+            for (let i = 0; i <= steps; i++) {
+                const x = (i / steps) * w;
+                const y = baseY
+                    + Math.sin(i / steps * Math.PI * 2 * this.freq + this.phase) * this.amp
+                    + Math.sin(i / steps * Math.PI * 3 * this.freq + this.phase * 1.3) * (this.amp * 0.35);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            /* soft glow pass — wider, more transparent */
+            ctx.globalAlpha = alpha * 0.25;
+            ctx.lineWidth   = this.thick * 6;
+            ctx.shadowBlur  = 0;
+            ctx.beginPath();
+            for (let i = 0; i <= steps; i++) {
+                const x = (i / steps) * w;
+                const y = baseY
+                    + Math.sin(i / steps * Math.PI * 2 * this.freq + this.phase) * this.amp
+                    + Math.sin(i / steps * Math.PI * 3 * this.freq + this.phase * 1.3) * (this.amp * 0.35);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            ctx.shadowBlur = 0;
         }
     }
+
+    /* ════════════════════════════════
+       RIPPLE RINGS
+       — spawned on click/touch,
+         expand outward and fade
+    ════════════════════════════════ */
+    const ripples = [];
+
+    class Ripple {
+        constructor(x, y) {
+            this.x      = x;
+            this.y      = y;
+            this.r      = 0;
+            this.maxR   = rand(120, 260);
+            this.speed  = rand(2.5, 4.5);
+            this.alpha  = 0.7;
+            this.color  = PALETTE[Math.floor(Math.random() * 5)]; // purples/violet
+            this.rings  = Math.floor(rand(2, 4)); // concentric rings
+            this.dead   = false;
+        }
+
+        update() {
+            this.r     += this.speed;
+            this.alpha  = 0.7 * (1 - this.r / this.maxR);
+            if (this.r >= this.maxR) this.dead = true;
+        }
+
+        draw() {
+            for (let k = 0; k < this.rings; k++) {
+                const ringR = this.r - k * 18;
+                if (ringR <= 0) continue;
+                const a = this.alpha * (1 - k * 0.28);
+                ctx.globalAlpha = a;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth   = 1.5 - k * 0.4;
+                ctx.shadowBlur  = 12;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, ringR, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+
+            /* inner fill flash — only at birth */
+            if (this.r < 30) {
+                const flash = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, 30);
+                flash.addColorStop(0, this.color + '33');
+                flash.addColorStop(1, this.color + '00');
+                ctx.globalAlpha = (1 - this.r / 30) * 0.5;
+                ctx.fillStyle   = flash;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+
+    function spawnRipple(x, y) {
+        if (ripples.length < 12) ripples.push(new Ripple(x, y));
+    }
+
+    window.addEventListener('click',     e => spawnRipple(e.clientX, e.clientY));
+    window.addEventListener('touchstart', e => {
+        if (e.touches.length > 0) spawnRipple(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+
 
     /* ════════════════════
        GRID LINES
     ════════════════════ */
     class GridLine {
         constructor(isH) {
-            this.isH  = isH;
-            this.pos  = isH ? rand(0, H()) : rand(0, W());
+            this.isH   = isH;
+            this.pos   = isH ? rand(0, H()) : rand(0, W());
             this.speed = rand(0.15, 0.45) * (isH ? 1 : 0.6);
-            this.alpha = rand(0.012, 0.035);
+            this.alpha = rand(0.012, 0.032);
         }
 
         update() {
@@ -103,8 +203,8 @@
             ctx.lineWidth   = 0.5;
             ctx.beginPath();
             if (this.isH) {
-                ctx.moveTo(0,    this.pos);
-                ctx.lineTo(W(),  this.pos);
+                ctx.moveTo(0,   this.pos);
+                ctx.lineTo(W(), this.pos);
             } else {
                 ctx.moveTo(this.pos, 0);
                 ctx.lineTo(this.pos, H());
@@ -113,93 +213,6 @@
         }
     }
 
-    /* ════════════════════
-       CONNECTION WEB
-    ════════════════════ */
-    class ConnectionWeb {
-        constructor() {
-            this.nodes = Array.from({ length: 28 }, () => ({
-                x:  rand(0.04, 0.96),
-                y:  rand(0.04, 0.96),
-                vx: rand(-0.00030, 0.00030),
-                vy: rand(-0.00030, 0.00030),
-            }));
-        }
-
-        update() {
-            this.nodes.forEach(n => {
-                n.x += n.vx;
-                n.y += n.vy;
-                if (n.x < 0.02 || n.x > 0.98) n.vx *= -1;
-                if (n.y < 0.02 || n.y > 0.98) n.vy *= -1;
-            });
-        }
-
-        draw() {
-            const mx = mouse.x / W();
-            const my = mouse.y / H();
-
-            /* node-to-node lines */
-            this.nodes.forEach((a, i) => {
-                this.nodes.forEach((b, j) => {
-                    if (j <= i) return;
-                    const dx   = a.x - b.x;
-                    const dy   = a.y - b.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < 0.28) {
-                        const t = (0.28 - dist) / 0.28;
-                        ctx.globalAlpha = t * 0.55;          /* was 0.06 → now 0.55 */
-                        ctx.strokeStyle = '#8b6ff7';
-                        ctx.lineWidth   = 0.8 + t * 1.0;     /* thicker near nodes */
-                        ctx.beginPath();
-                        ctx.moveTo(a.x * W(), a.y * H());
-                        ctx.lineTo(b.x * W(), b.y * H());
-                        ctx.stroke();
-                    }
-                });
-
-                /* mouse attraction lines — brighter + wider radius */
-                const dx   = a.x - mx;
-                const dy   = a.y - my;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < 0.30) {
-                    const t = (0.30 - dist) / 0.30;
-                    ctx.globalAlpha = t * 0.75;              /* was 0.28 → now 0.75 */
-                    ctx.strokeStyle = '#d4bbff';
-                    ctx.lineWidth   = 1.2 + t * 1.2;
-                    ctx.beginPath();
-                    ctx.moveTo(a.x * W(), a.y * H());
-                    ctx.lineTo(mouse.x,   mouse.y);
-                    ctx.stroke();
-                }
-
-                /* node dots — bigger & brighter */
-                const nodeDist = Math.sqrt((a.x - mx) ** 2 + (a.y - my) ** 2);
-                const glow     = nodeDist < 0.18 ? 1.0 : 0.70;
-                const radius   = nodeDist < 0.18 ? 3.5  : 2.2;
-                ctx.globalAlpha = glow;
-                ctx.fillStyle   = nodeDist < 0.18 ? '#d4bbff' : '#a78bfe';
-                ctx.beginPath();
-                ctx.arc(a.x * W(), a.y * H(), radius, 0, Math.PI * 2);
-                ctx.fill();
-
-                /* soft halo on hovered nodes */
-                if (nodeDist < 0.18) {
-                    const grad = ctx.createRadialGradient(
-                        a.x * W(), a.y * H(), 0,
-                        a.x * W(), a.y * H(), 12
-                    );
-                    grad.addColorStop(0, 'rgba(180,142,255,0.30)');
-                    grad.addColorStop(1, 'rgba(180,142,255,0.00)');
-                    ctx.globalAlpha = 1;
-                    ctx.fillStyle   = grad;
-                    ctx.beginPath();
-                    ctx.arc(a.x * W(), a.y * H(), 12, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            });
-        }
-    }
 
     /* ════════════════════
        FLOATING SHAPES
@@ -208,17 +221,17 @@
         constructor() { this.reset(true); }
 
         reset(init) {
-            this.x     = rand(0, W());
-            this.y     = init ? rand(0, H()) : H() + rand(20, 80);
-            this.z     = rand(0.12, 0.45);
-            this.size  = rand(18, 72) * this.z;
-            this.speedY = rand(0.08, 0.32) * this.z;
-            this.speedX = rand(-0.08, 0.08);
-            this.rot    = rand(0, Math.PI * 2);
+            this.x        = rand(0, W());
+            this.y        = init ? rand(0, H()) : H() + rand(20, 80);
+            this.z        = rand(0.12, 0.45);
+            this.size     = rand(18, 72) * this.z;
+            this.speedY   = rand(0.08, 0.32) * this.z;
+            this.speedX   = rand(-0.08, 0.08);
+            this.rot      = rand(0, Math.PI * 2);
             this.rotSpeed = rand(-0.003, 0.003);
-            this.type  = Math.floor(Math.random() * 3); // 0=hex 1=square 2=tri
-            this.color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
-            this.alpha = rand(0.035, 0.10) * this.z;
+            this.type     = Math.floor(Math.random() * 3);
+            this.color    = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+            this.alpha    = rand(0.035, 0.10) * this.z;
         }
 
         update() {
@@ -226,7 +239,6 @@
             this.y   += this.speedY;
             this.rot += this.rotSpeed;
             if (this.y < -(this.size * 2)) this.reset(false);
-            /* reset at bottom if init placed there */
             if (this.speedY < 0 && this.y > H() + this.size * 2) this.reset(false);
         }
 
@@ -242,7 +254,6 @@
             ctx.beginPath();
 
             if (this.type === 0) {
-                /* hexagon */
                 for (let i = 0; i < 6; i++) {
                     const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
                     i === 0
@@ -251,10 +262,8 @@
                 }
                 ctx.closePath();
             } else if (this.type === 1) {
-                /* square */
                 ctx.rect(-s / 2, -s / 2, s, s);
             } else {
-                /* triangle */
                 ctx.moveTo(0, -s);
                 ctx.lineTo(s * 0.866,  s * 0.5);
                 ctx.lineTo(-s * 0.866, s * 0.5);
@@ -266,6 +275,7 @@
         }
     }
 
+
     /* ════════════════════
        PARTICLE FIELD
     ════════════════════ */
@@ -273,15 +283,15 @@
         constructor() { this.reset(true); }
 
         reset(init) {
-            this.x      = rand(0, W());
-            this.y      = init ? rand(0, H()) : H() + rand(5, 20);
-            this.z      = rand(0.2, 1.0);
-            this.r      = rand(0.8, 2.8) * this.z;
-            this.speedY = rand(-0.25, -0.8) * this.z;
-            this.speedX = rand(-0.12, 0.12);
-            this.color  = PALETTE[Math.floor(Math.random() * PALETTE.length)];
-            this.alpha  = rand(0.25, 0.75) * this.z;
-            this.twinkle      = rand(0, Math.PI * 2);
+            this.x           = rand(0, W());
+            this.y           = init ? rand(0, H()) : H() + rand(5, 20);
+            this.z           = rand(0.2, 1.0);
+            this.r           = rand(0.8, 2.8) * this.z;
+            this.speedY      = rand(-0.25, -0.8) * this.z;
+            this.speedX      = rand(-0.12, 0.12);
+            this.color       = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+            this.alpha       = rand(0.25, 0.75) * this.z;
+            this.twinkle     = rand(0, Math.PI * 2);
             this.twinkleSpeed = rand(0.01, 0.04);
         }
 
@@ -302,29 +312,45 @@
         }
     }
 
-    /* ── Instantiate all layers ── */
-    const nebulae = [
-        new Nebula(0.12, 0.18, 220, '#5c4ef0'),
-        new Nebula(0.85, 0.78, 190, '#7c3aed'),
-        new Nebula(0.50, 0.52, 150, '#00d4aa'),
-        new Nebula(0.76, 0.12, 170, '#fd79a8'),
+
+    /* ── Instantiate ── */
+    const auroras = [
+        new AuroraWave({ yBase: 0.18, amp: 55,  freq: 1.4, speed: 0.006, color1: '#5c4ef0cc', color2: '#00d4aa99', thick: 2.5, alpha: 0.55 }),
+        new AuroraWave({ yBase: 0.32, amp: 40,  freq: 1.8, speed: 0.005, color1: '#8b6ff7bb', color2: '#fd79a888', thick: 1.8, alpha: 0.42 }),
+        new AuroraWave({ yBase: 0.50, amp: 70,  freq: 1.1, speed: 0.004, color1: '#7c3aedaa', color2: '#5c4ef0aa', thick: 3.2, alpha: 0.60 }),
+        new AuroraWave({ yBase: 0.65, amp: 35,  freq: 2.2, speed: 0.007, color1: '#00d4aa99', color2: '#b48effaa', thick: 1.5, alpha: 0.38 }),
+        new AuroraWave({ yBase: 0.80, amp: 50,  freq: 1.6, speed: 0.005, color1: '#fd79a877', color2: '#8b6ff799', thick: 2.0, alpha: 0.45 }),
+        new AuroraWave({ yBase: 0.10, amp: 28,  freq: 2.5, speed: 0.008, color1: '#b48eff88', color2: '#5c4ef077', thick: 1.2, alpha: 0.30 }),
     ];
 
     const hLines   = Array.from({ length: 6  }, () => new GridLine(true));
     const vLines   = Array.from({ length: 9  }, () => new GridLine(false));
-    const web      = new ConnectionWeb();
     const shapes   = Array.from({ length: 16 }, () => new FloatingShape());
     const particles = Array.from({ length: 100 }, () => new Particle());
+
 
     /* ── Render loop ── */
     function frame() {
         ctx.clearRect(0, 0, W(), H());
 
-        nebulae.forEach(n  => { n.update(); n.draw(); });
-        hLines.forEach(l   => { l.update(); l.draw(); });
-        vLines.forEach(l   => { l.update(); l.draw(); });
-        web.update(); web.draw();
-        shapes.forEach(s   => { s.update(); s.draw(); });
+        /* 1. Aurora waves — deepest layer */
+        auroras.forEach(a => { a.update(); a.draw(); });
+
+        /* 2. Grid lines */
+        hLines.forEach(l  => { l.update(); l.draw(); });
+        vLines.forEach(l  => { l.update(); l.draw(); });
+
+        /* 3. Floating shapes */
+        shapes.forEach(s  => { s.update(); s.draw(); });
+
+        /* 4. Ripple rings */
+        for (let i = ripples.length - 1; i >= 0; i--) {
+            ripples[i].update();
+            ripples[i].draw();
+            if (ripples[i].dead) ripples.splice(i, 1);
+        }
+
+        /* 5. Particles — top layer */
         particles.forEach(p => { p.update(); p.draw(); });
 
         ctx.globalAlpha = 1;
