@@ -118,11 +118,11 @@
     ════════════════════ */
     class ConnectionWeb {
         constructor() {
-            this.nodes = Array.from({ length: 18 }, () => ({
+            this.nodes = Array.from({ length: 28 }, () => ({
                 x:  rand(0.04, 0.96),
                 y:  rand(0.04, 0.96),
-                vx: rand(-0.00025, 0.00025),
-                vy: rand(-0.00025, 0.00025),
+                vx: rand(-0.00030, 0.00030),
+                vy: rand(-0.00030, 0.00030),
             }));
         }
 
@@ -146,10 +146,11 @@
                     const dx   = a.x - b.x;
                     const dy   = a.y - b.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < 0.24) {
-                        ctx.globalAlpha = (0.24 - dist) / 0.24 * 0.06;
+                    if (dist < 0.28) {
+                        const t = (0.28 - dist) / 0.28;
+                        ctx.globalAlpha = t * 0.55;          /* was 0.06 → now 0.55 */
                         ctx.strokeStyle = '#8b6ff7';
-                        ctx.lineWidth   = 0.5;
+                        ctx.lineWidth   = 0.8 + t * 1.0;     /* thicker near nodes */
                         ctx.beginPath();
                         ctx.moveTo(a.x * W(), a.y * H());
                         ctx.lineTo(b.x * W(), b.y * H());
@@ -157,26 +158,45 @@
                     }
                 });
 
-                /* mouse attraction lines */
+                /* mouse attraction lines — brighter + wider radius */
                 const dx   = a.x - mx;
                 const dy   = a.y - my;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < 0.20) {
-                    ctx.globalAlpha = (0.20 - dist) / 0.20 * 0.28;
-                    ctx.strokeStyle = '#b48eff';
-                    ctx.lineWidth   = 0.7;
+                if (dist < 0.30) {
+                    const t = (0.30 - dist) / 0.30;
+                    ctx.globalAlpha = t * 0.75;              /* was 0.28 → now 0.75 */
+                    ctx.strokeStyle = '#d4bbff';
+                    ctx.lineWidth   = 1.2 + t * 1.2;
                     ctx.beginPath();
                     ctx.moveTo(a.x * W(), a.y * H());
                     ctx.lineTo(mouse.x,   mouse.y);
                     ctx.stroke();
                 }
 
-                /* node dots */
-                ctx.globalAlpha = 0.35;
-                ctx.fillStyle   = '#9d8fff';
+                /* node dots — bigger & brighter */
+                const nodeDist = Math.sqrt((a.x - mx) ** 2 + (a.y - my) ** 2);
+                const glow     = nodeDist < 0.18 ? 1.0 : 0.70;
+                const radius   = nodeDist < 0.18 ? 3.5  : 2.2;
+                ctx.globalAlpha = glow;
+                ctx.fillStyle   = nodeDist < 0.18 ? '#d4bbff' : '#a78bfe';
                 ctx.beginPath();
-                ctx.arc(a.x * W(), a.y * H(), 1.3, 0, Math.PI * 2);
+                ctx.arc(a.x * W(), a.y * H(), radius, 0, Math.PI * 2);
                 ctx.fill();
+
+                /* soft halo on hovered nodes */
+                if (nodeDist < 0.18) {
+                    const grad = ctx.createRadialGradient(
+                        a.x * W(), a.y * H(), 0,
+                        a.x * W(), a.y * H(), 12
+                    );
+                    grad.addColorStop(0, 'rgba(180,142,255,0.30)');
+                    grad.addColorStop(1, 'rgba(180,142,255,0.00)');
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle   = grad;
+                    ctx.beginPath();
+                    ctx.arc(a.x * W(), a.y * H(), 12, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             });
         }
     }
