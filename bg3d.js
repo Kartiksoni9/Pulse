@@ -25,6 +25,13 @@
     /* ── Helpers ── */
     function rand(min, max) { return min + Math.random() * (max - min); }
 
+    function hexToRgba(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r},${g},${b},${alpha})`;
+    }
+
     const PALETTE = [
         '#5c4ef0', '#8b6ff7', '#b48eff',
         '#4f46e5', '#7c3aed', '#00d4aa', '#fd79a8'
@@ -73,11 +80,11 @@
 
             /* horizontal gradient for colour shift left→right */
             const grad = ctx.createLinearGradient(0, 0, w, 0);
-            grad.addColorStop(0,    this.color1 + '00');
-            grad.addColorStop(0.25, this.color1);
-            grad.addColorStop(0.5,  this.color2);
-            grad.addColorStop(0.75, this.color1);
-            grad.addColorStop(1,    this.color2 + '00');
+            grad.addColorStop(0,    hexToRgba(this.color1, 0));
+            grad.addColorStop(0.25, hexToRgba(this.color1, 1));
+            grad.addColorStop(0.5,  hexToRgba(this.color2, 1));
+            grad.addColorStop(0.75, hexToRgba(this.color1, 1));
+            grad.addColorStop(1,    hexToRgba(this.color2, 0));
 
             ctx.globalAlpha = alpha;
             ctx.strokeStyle = grad;
@@ -315,12 +322,12 @@
 
     /* ── Instantiate ── */
     const auroras = [
-        new AuroraWave({ yBase: 0.18, amp: 55,  freq: 1.4, speed: 0.006, color1: '#5c4ef0cc', color2: '#00d4aa99', thick: 2.5, alpha: 0.55 }),
-        new AuroraWave({ yBase: 0.32, amp: 40,  freq: 1.8, speed: 0.005, color1: '#8b6ff7bb', color2: '#fd79a888', thick: 1.8, alpha: 0.42 }),
-        new AuroraWave({ yBase: 0.50, amp: 70,  freq: 1.1, speed: 0.004, color1: '#7c3aedaa', color2: '#5c4ef0aa', thick: 3.2, alpha: 0.60 }),
-        new AuroraWave({ yBase: 0.65, amp: 35,  freq: 2.2, speed: 0.007, color1: '#00d4aa99', color2: '#b48effaa', thick: 1.5, alpha: 0.38 }),
-        new AuroraWave({ yBase: 0.80, amp: 50,  freq: 1.6, speed: 0.005, color1: '#fd79a877', color2: '#8b6ff799', thick: 2.0, alpha: 0.45 }),
-        new AuroraWave({ yBase: 0.10, amp: 28,  freq: 2.5, speed: 0.008, color1: '#b48eff88', color2: '#5c4ef077', thick: 1.2, alpha: 0.30 }),
+        new AuroraWave({ yBase: 0.18, amp: 55,  freq: 1.4, speed: 0.006, color1: '#5c4ef0', color2: '#00d4aa', thick: 3.0, alpha: 0.75 }),
+        new AuroraWave({ yBase: 0.32, amp: 40,  freq: 1.8, speed: 0.005, color1: '#8b6ff7', color2: '#fd79a8', thick: 2.2, alpha: 0.60 }),
+        new AuroraWave({ yBase: 0.50, amp: 70,  freq: 1.1, speed: 0.004, color1: '#7c3aed', color2: '#5c4ef0', thick: 4.0, alpha: 0.80 }),
+        new AuroraWave({ yBase: 0.65, amp: 35,  freq: 2.2, speed: 0.007, color1: '#00d4aa', color2: '#b48eff', thick: 2.0, alpha: 0.55 }),
+        new AuroraWave({ yBase: 0.80, amp: 50,  freq: 1.6, speed: 0.005, color1: '#fd79a8', color2: '#8b6ff7', thick: 2.5, alpha: 0.62 }),
+        new AuroraWave({ yBase: 0.10, amp: 28,  freq: 2.5, speed: 0.008, color1: '#b48eff', color2: '#5c4ef0', thick: 1.8, alpha: 0.50 }),
     ];
 
     const hLines   = Array.from({ length: 6  }, () => new GridLine(true));
